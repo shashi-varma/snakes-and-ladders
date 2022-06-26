@@ -1,4 +1,4 @@
-package org.sl;
+package org.sl.board;
 
 import java.util.ArrayList;
 import java.util.List;

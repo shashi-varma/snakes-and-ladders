@@ -1,4 +1,4 @@
-package org.sl;
+package org.sl.game;
 
 public class Player {
 

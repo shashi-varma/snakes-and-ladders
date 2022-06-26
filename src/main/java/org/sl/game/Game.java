@@ -1,6 +1,5 @@
 package org.sl.game;
 
-import org.sl.Player;
 import org.sl.board.Board;
 import org.sl.board.BoardLocationInfo;
 import org.sl.model.MovingWormHole;
@@ -32,36 +31,47 @@ public class Game {
 
     private Integer totalTurns = 0;
 
-    public void movePlayer(Player currentPlayer, List<Integer> diceRollsInCurrentTurn){
+    public void movePlayer(PlayerTurnInfo playerTurnInfo){
         totalTurns++;
 
+        Player currentPlayer = playerTurnInfo.getPlayer();
         Integer startingLocation = currentPlayer.getLocation();
 
-        Deque<Integer> diceRolls = new ArrayDeque<>(diceRollsInCurrentTurn);
+        Deque<Integer> diceRollsInCurrentTurn = new ArrayDeque<>( playerTurnInfo.getDiceRolls() );
 
-        while(!diceRolls.isEmpty()) {
-            int diceRoll = diceRolls.poll();
+        Integer previousLocation = startingLocation;
+        while(!diceRollsInCurrentTurn.isEmpty()) {
+            int diceRoll = diceRollsInCurrentTurn.poll();
+            gameLogger.logMovingForDiceRoll(currentPlayer, diceRoll);
+
             int nextLocation = currentPlayer.getLocation() + diceRoll;
-
             if(board.isEndLocation(nextLocation)) {
-                if(diceRolls.isEmpty()){
+                if(diceRollsInCurrentTurn.isEmpty()){
                     // Got to end location by using up all dice rolls, hence player completes the game
-                    winners.put(currentPlayer.getPlayerId(), winners.size() + 1);
+                    winners.put(currentPlayer.getPlayerId(), winners.size());
+                    gameLogger.logPlayerMovement(currentPlayer, previousLocation, nextLocation);
+                    gameLogger.logPlayerWinning(currentPlayer);
                 } else {
                     // Got to end location without using up dice rolls, hence this turn of the player is wasted, putting him at starting location
                     currentPlayer.setLocation(startingLocation);
+                    playerTurnInfo.setWastedTurn(true);
+                    gameLogger.logWastedTurn(currentPlayer, "Unable to accommodate dice rolls. Resetting player's location to starting location " + startingLocation);
                 }
                 break;
             } else if(board.isGreaterThanEndLocation(nextLocation)) {
                 // Dice rolls are more than required and Player can't accommodate them (i.e next location > finish line), hence the turn is wasted
                 currentPlayer.setLocation(startingLocation);
+                playerTurnInfo.setWastedTurn(true);
+                gameLogger.logWastedTurn(currentPlayer, "Unable to accommodate dice rolls. Resetting player's location to starting location " + startingLocation);
                 break;
             }
+            gameLogger.logPlayerMovement(currentPlayer, previousLocation, nextLocation);
 
             // looking for snakes / ladders at the next location
             BoardLocationInfo locationInfo = board.getLocationInfo(nextLocation);
             if(locationInfo.hasWormHole()){
                 while(locationInfo.hasWormHole()) { // taking care of cascading snakes / ladders case
+                    previousLocation = nextLocation;
                     WormHole wormHole = locationInfo.getWormHoleOnTheLocation();
                     if(wormHole instanceof SimpleWormHole){
                         nextLocation = wormHole.getDestination();
@@ -70,10 +80,12 @@ public class Game {
                     } else if(wormHole instanceof MovingWormHole) {
                         nextLocation = wormHole.getDestinationBasedOnTurnNumber(totalTurns);
                     }
+                    gameLogger.logWormHoleEncounter(currentPlayer, wormHole, previousLocation, nextLocation);
                     locationInfo = board.getLocationInfo(nextLocation);
                 }
             }
 
+            previousLocation = nextLocation;
             currentPlayer.setLocation(nextLocation);
         }
     }
@@ -92,5 +104,13 @@ public class Game {
 
     public GameLogger getGameLogger() {
         return gameLogger;
+    }
+
+    public Player[] getWinnersInOrder() {
+        Player[] winnersInOrder = new Player[winners.size()];
+        for(String playerId : winners.keySet()){
+            winnersInOrder[winners.get(playerId)] = players.get(playerId);
+        }
+        return winnersInOrder;
     }
 }
